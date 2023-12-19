@@ -94,6 +94,7 @@ local plugins = {
 			"CornScopeCycle",
 			"CornRender",
 		},
+		opts = {},
 		event = "VeryLazy",
 	},
 

@@ -18,6 +18,7 @@ local servers_with_default_config = {
   "volar", -- note: use takeover mode in large project
   "kotlin_language_server",
   "tailwindcss",
+  "gdscript",
 
   -- "typescript-language-server",
 }
