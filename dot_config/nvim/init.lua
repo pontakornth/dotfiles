@@ -16,13 +16,15 @@ if not vim.loop.fs_stat(mini_path) then
 end
 
 -- Set up 'mini.deps' (customize to your liking)
-require("mini.deps").setup({ path = { package = path_package } })
+local MiniDeps = require("mini.deps")
+MiniDeps.setup({ path = { package = path_package } })
 
 -- Configuration
 vim.opt.signcolumn = "yes"
 vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
+vim.g.mapleader = " " -- Map leader to space
 
 -- Install plugins
 
@@ -33,6 +35,10 @@ add({
 	depends = { "williamboman/mason.nvim" },
 })
 add({ source = "VonHeikemen/lsp-zero.nvim", checkout = "v4.x" })
+add({
+	source = "L3MON4D3/LuaSnip",
+	checkout = "v2.*",
+})
 add({
 	source = "hrsh7th/nvim-cmp",
 	depends = {
@@ -66,6 +72,21 @@ add("stevearc/conform.nvim")
 -- Nvim lint (lint)
 add("mfussenegger/nvim-lint")
 
+add({
+	source = "nvim-telescope/telescope.nvim",
+	depends = {
+		"nvim-lua/plenary.nvim",
+	},
+})
+
+-- LazyGit because I am lazy.
+add({
+	source = "kdheepak/lazygit.nvim",
+	depends = {
+		"nvim-lua/plenary.nvim",
+	},
+})
+
 local now, later = MiniDeps.now, MiniDeps.later
 
 vim.o.background = "dark" -- or "light" for light mode
@@ -75,13 +96,21 @@ vim.cmd([[colorscheme gruvbox]])
 require("mini.basics").setup()
 require("mini.starter").setup()
 require("mini.icons").setup()
+-- I don't want to use built-in explorer.
+require("mini.files").setup()
 
 -- Mini configuration that can be configured later
 later(function()
+	require("mini.extra").setup()
 	require("mini.surround").setup()
 	require("mini.statusline").setup()
 	require("mini.tabline").setup()
 	require("mini.jump").setup()
+	require("mini.pairs").setup()
+end)
+
+later(function()
+	vim.keymap.set("n", "<leader>G", "<cmd>LazyGit<cr>", { desc = "LazyGit" })
 end)
 
 -- Plugin configuration
@@ -94,6 +123,7 @@ end)
 
 later(function()
 	require("oil").setup()
+	vim.keymap.set("n", "<leader>O", "<cmd>Oil<cr>")
 end)
 
 later(function()
@@ -137,6 +167,19 @@ now(function()
 	})
 end)
 
+-- Telescope
+later(function()
+	require("telescope").setup()
+	local builtin = require("telescope.builtin")
+	vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Telescope find files" })
+	vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Telescope live grep" })
+	vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Telescope buffers" })
+	vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Telescope help tags" })
+	vim.keymap.set("n", "<leader>fs", builtin.lsp_document_symbols, { desc = "Telescope document symbol" })
+	vim.keymap.set("n", "<leader>fS", builtin.lsp_workspace_symbols, { desc = "Telescope workspace symbol" })
+	vim.keymap.set("n", "<leader>fd", builtin.diagnostics, { desc = "Telescope diagnostics" })
+end)
+
 now(function()
 	local lspconfig_defaults = require("lspconfig").util.default_config
 	lspconfig_defaults.capabilities =
@@ -152,16 +195,19 @@ end)
 -- CMP
 now(function()
 	local cmp = require("cmp")
+	local luasnip = require("luasnip")
 
 	cmp.setup({
 		sources = {
 			{ name = "nvim_lsp" },
 			{ name = "buffer" },
+			{ name = "luasnip" },
 		},
 		snippet = {
 			expand = function(args)
 				-- You need Neovim v0.10 to use vim.snippet
-				vim.snippet.expand(args.body)
+				require("luasnip").lsp_expand(args.body)
+				-- vim.snippet.expand(args.body)
 			end,
 		},
 		mapping = cmp.mapping.preset.insert({
@@ -170,6 +216,25 @@ now(function()
 			["<C-Space>"] = cmp.mapping.complete(),
 			["<C-e>"] = cmp.mapping.abort(),
 			["<CR>"] = cmp.mapping.confirm({ select = true }), -- Accept currently selected item. Set `select` to `false` to only confirm explicitly selected items.
+			["<Tab>"] = cmp.mapping(function(fallback)
+				if cmp.visible() then
+					cmp.select_next_item()
+				elseif luasnip.expand_or_jumpable() then
+					luasnip.expand_or_jump()
+				else
+					fallback()
+				end
+			end, { "i", "s" }),
+
+			["<S-Tab>"] = cmp.mapping(function(fallback)
+				if cmp.visible() then
+					cmp.select_prev_item()
+				elseif luasnip.jumpable(-1) then
+					luasnip.jump(-1)
+				else
+					fallback()
+				end
+			end, { "i", "s" }),
 		}),
 	})
 end)
