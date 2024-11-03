@@ -4,4 +4,4 @@ I started over again. You can take inspiration from it but please don't blindly 
 
 ## What's inside?
 
-- Neovim: I use NVChad as base configuration.
+- Neovim: I use my own customized configs.
