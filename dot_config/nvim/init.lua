@@ -15,15 +15,20 @@ if not vim.loop.fs_stat(mini_path) then
 	vim.cmd('echo "Installed `mini.nvim`" | redraw')
 end
 
+-- Prepend mise shims to PATH
+vim.env.PATH = vim.env.HOME .. "/.local/share/mise/shims:" .. vim.env.PATH
+
 -- Set up 'mini.deps' (customize to your liking)
 local MiniDeps = require("mini.deps")
 MiniDeps.setup({ path = { package = path_package } })
+MiniDeps.add({ name = "mini.nvim" })
 
 -- Configuration
 vim.opt.signcolumn = "yes"
 vim.opt.shiftwidth = 2
 vim.opt.tabstop = 2
 vim.opt.softtabstop = 2
+vim.opt.scrolloff = 10
 vim.g.mapleader = " " -- Map leader to space
 
 -- Install plugins
@@ -61,7 +66,10 @@ add({
 
 add("stevearc/oil.nvim")
 add("folke/which-key.nvim")
-add("ellisonleao/gruvbox.nvim")
+add({
+	source = "rose-pine/neovim",
+	name = "rose-pine",
+})
 
 -- Mason
 add("williamboman/mason.nvim")
@@ -79,6 +87,13 @@ add({
 	},
 })
 
+add({
+	source = "kelly-lin/telescope-ag",
+	depends = {
+		"nvim-telescope/telescope.nvim",
+	},
+})
+
 -- LazyGit because I am lazy.
 add({
 	source = "kdheepak/lazygit.nvim",
@@ -87,10 +102,18 @@ add({
 	},
 })
 
+-- Tmux navigation
+add({
+	source = "christoomey/vim-tmux-navigator",
+	name = "vim-tmux-navigator",
+})
+
 local now, later = MiniDeps.now, MiniDeps.later
 
+local utils = require("utils")
+
 vim.o.background = "dark" -- or "light" for light mode
-vim.cmd([[colorscheme gruvbox]])
+vim.cmd([[colorscheme rose-pine-moon]])
 
 -- Mini configuration
 require("mini.basics").setup()
@@ -99,9 +122,18 @@ require("mini.icons").setup()
 -- I don't want to use built-in explorer.
 require("mini.files").setup()
 
+now(function()
+	vim.keymap.set("n", "<C-h>", "<cmd> TmuxNavigateLeft<cr>", { desc = "window left" })
+	vim.keymap.set("n", "<C-l>", "<cmd> TmuxNavigateRight<cr>", { desc = "window right" })
+	vim.keymap.set("n", "<C-j>", "<cmd> TmuxNavigateDown<cr>", { desc = "window down" })
+	vim.keymap.set("n", "<C-k>", "<cmd> TmuxNavigateUp<cr>", { desc = "window up" })
+end)
+
 -- Mini configuration that can be configured later
 later(function()
 	require("mini.extra").setup()
+	require("mini.ai").setup()
+	require("mini.animate").setup()
 	require("mini.surround").setup()
 	require("mini.statusline").setup()
 	require("mini.tabline").setup()
@@ -110,7 +142,13 @@ later(function()
 end)
 
 later(function()
+	-- require("codeium").setup()
+	-- require("vim-tmux-navigator").setup()
+end)
+
+later(function()
 	vim.keymap.set("n", "<leader>G", "<cmd>LazyGit<cr>", { desc = "LazyGit" })
+	vim.keymap.set("n", "<leader>F", MiniFiles.open, { desc = "Files" })
 end)
 
 -- Plugin configuration
@@ -160,6 +198,8 @@ now(function()
 			vim.keymap.set("n", "go", "<cmd>lua vim.lsp.buf.type_definition()<cr>", opts)
 			vim.keymap.set("n", "gr", "<cmd>lua vim.lsp.buf.references()<cr>", opts)
 			vim.keymap.set("n", "gs", "<cmd>lua vim.lsp.buf.signature_help()<cr>", opts)
+			vim.keymap.set("n", "ga", "<cmd>lua vim.lsp.buf.code_action()<cr>", opts)
+			vim.keymap.set("n", "cr", "<cmd>lua vim.lsp.buf.rename()<cr>", opts)
 			vim.keymap.set("n", "<F2>", "<cmd>lua vim.lsp.buf.rename()<cr>", opts)
 			vim.keymap.set({ "n", "x" }, "<F3>", "<cmd>lua vim.lsp.buf.format({async = true})<cr>", opts)
 			vim.keymap.set("n", "<F4>", "<cmd>lua vim.lsp.buf.code_action()<cr>", opts)
@@ -170,8 +210,14 @@ end)
 -- Telescope
 later(function()
 	require("telescope").setup()
+	local telescope_ag = require("telescope-ag")
+	telescope_ag.setup({
+		cmd = telescope_ag.cmds.rg, -- defaults to telescope_ag.cmds.ag
+	})
 	local builtin = require("telescope.builtin")
-	vim.keymap.set("n", "<leader>ff", builtin.find_files, { desc = "Telescope find files" })
+	vim.keymap.set("n", "<leader>ff", function()
+		builtin.find_files({ hidden = true })
+	end, { desc = "Telescope find files" })
 	vim.keymap.set("n", "<leader>fg", builtin.live_grep, { desc = "Telescope live grep" })
 	vim.keymap.set("n", "<leader>fb", builtin.buffers, { desc = "Telescope buffers" })
 	vim.keymap.set("n", "<leader>fh", builtin.help_tags, { desc = "Telescope help tags" })
@@ -189,7 +235,19 @@ end)
 -- LSP setup
 now(function()
 	local lspconfig = require("lspconfig")
-	require("lspconfig").lua_ls.setup({})
+	-- LSP without any extra configuration
+	local default_lsp = { "lua_ls", "gleam", "basedpyright", "tailwindcss", "gdscript", "gdshader_lsp" }
+	for index, value in ipairs(default_lsp) do
+		lspconfig[value].setup({})
+	end
+	-- Prevent Deno from conflicting with TS server (Node and Bun)
+	lspconfig.denols.setup({
+		root_dir = lspconfig.util.root_pattern("deno.json", "deno.jsonc"),
+	})
+	lspconfig.ts_ls.setup({
+		root_dir = lspconfig.util.root_pattern("package.json"),
+		single_file_support = false,
+	})
 end)
 
 -- CMP
@@ -202,6 +260,7 @@ now(function()
 			{ name = "nvim_lsp" },
 			{ name = "buffer" },
 			{ name = "luasnip" },
+			{ name = "codeium", group_index = 1, priority = 100 },
 		},
 		snippet = {
 			expand = function(args)
